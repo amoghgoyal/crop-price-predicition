@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CropSignal — AI Price Predictions</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#060b14;color:#e2e8f0;min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 20% 20%,#0d2137 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,#0a1f0f 0%,transparent 60%);pointer-events:none;z-index:0}
+
+/* ─── Layout ─── */
+.app{display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1}
+header{padding:1.2rem 2rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.07);backdrop-filter:blur(12px);background:rgba(6,11,20,.7);position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:.6rem;font-size:1.3rem;font-weight:700;background:linear-gradient(135deg,#22d3ee,#4ade80);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo span{font-size:1.5rem}
+.header-meta{font-size:.75rem;color:#64748b}
+#updated{color:#94a3b8}
+
+/* ─── Stats Bar ─── */
+.stats-bar{display:flex;gap:1rem;padding:1rem 2rem;border-bottom:1px solid rgba(255,255,255,.05)}
+.stat-pill{flex:1;display:flex;align-items:center;gap:.7rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:.75rem 1.2rem;cursor:pointer;transition:.2s}
+.stat-pill:hover{background:rgba(255,255,255,.08)}
+.stat-pill.active{border-color:var(--c,.5rem)}
+.stat-pill .num{font-size:1.5rem;font-weight:700}
+.stat-pill .lbl{font-size:.75rem;color:#94a3b8}
+.buy-pill{--c:#4ade80}.buy-pill .num{color:#4ade80}
+.sell-pill{--c:#f87171}.sell-pill .num{color:#f87171}
+.hold-pill{--c:#fbbf24}.hold-pill .num{color:#fbbf24}
+.all-pill{--c:#60a5fa}.all-pill .num{color:#60a5fa}
+
+/* ─── Main ─── */
+.main{display:flex;flex:1;gap:0}
+.sidebar{width:340px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;height:calc(100vh - 120px);position:sticky;top:69px}
+.search-box{padding:1rem;border-bottom:1px solid rgba(255,255,255,.07)}
+.search-box input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:.6rem 1rem;color:#e2e8f0;font-size:.85rem;outline:none;transition:.2s}
+.search-box input:focus{border-color:#22d3ee;background:rgba(34,211,238,.06)}
+.crop-list{flex:1;overflow-y:auto;padding:.5rem}
+.crop-list::-webkit-scrollbar{width:4px}
+.crop-list::-webkit-scrollbar-track{background:transparent}
+.crop-list::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:4px}
+.crop-item{display:flex;align-items:center;justify-content:space-between;padding:.7rem 1rem;border-radius:10px;cursor:pointer;transition:.15s;margin-bottom:2px}
+.crop-item:hover{background:rgba(255,255,255,.06)}
+.crop-item.active{background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.2)}
+.crop-name{font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.crop-price{font-size:.8rem;color:#94a3b8}
+.badge{font-size:.65rem;font-weight:700;padding:.2rem .5rem;border-radius:6px;letter-spacing:.5px}
+.badge.BUY{background:rgba(74,222,128,.15);color:#4ade80;border:1px solid rgba(74,222,128,.3)}
+.badge.SELL{background:rgba(248,113,113,.15);color:#f87171;border:1px solid rgba(248,113,113,.3)}
+.badge.HOLD{background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.25)}
+
+/* ─── Detail Panel ─── */
+.detail{flex:1;padding:1.5rem 2rem;overflow-y:auto}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1rem;color:#475569}
+.empty-state .icon{font-size:4rem}
+
+.detail-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem}
+.detail-title{font-size:1.6rem;font-weight:700}
+.detail-type{font-size:.75rem;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-top:.2rem}
+
+.signal-card{display:flex;align-items:center;gap:1rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:1.2rem 1.5rem}
+.signal-card.BUY{background:rgba(74,222,128,.07);border-color:rgba(74,222,128,.25)}
+.signal-card.SELL{background:rgba(248,113,113,.07);border-color:rgba(248,113,113,.25)}
+.signal-card.HOLD{background:rgba(251,191,36,.06);border-color:rgba(251,191,36,.2)}
+.signal-emoji{font-size:2.5rem}
+.signal-text{font-size:1.8rem;font-weight:800}
+.signal-text.BUY{color:#4ade80}
+.signal-text.SELL{color:#f87171}
+.signal-text.HOLD{color:#fbbf24}
+.signal-sub{font-size:.8rem;color:#94a3b8}
+
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;margin:1.5rem 0}
+.metric{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1rem 1.2rem}
+.metric .m-label{font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:.4rem}
+.metric .m-value{font-size:1.3rem;font-weight:700;color:#e2e8f0}
+.metric .m-sub{font-size:.72rem;color:#94a3b8;margin-top:.2rem}
+.up{color:#4ade80!important}.down{color:#f87171!important}
+
+.chart-wrap{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:1.5rem;margin-bottom:1.5rem}
+.chart-title{font-size:.9rem;font-weight:600;margin-bottom:1rem;color:#94a3b8}
+.chart-wrap canvas{max-height:300px}
+
+/* ─── Loading ─── */
+.loading{display:flex;align-items:center;justify-content:center;height:200px;font-size:.9rem;color:#475569}
+.spinner{width:28px;height:28px;border:3px solid rgba(34,211,238,.2);border-top-color:#22d3ee;border-radius:50%;animation:spin .8s linear infinite;margin-right:.8rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── Responsive ─── */
+@media(max-width:768px){
+  .main{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:static}
+  .stats-bar{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Header -->
+<header>
+  <div class="logo"><span>🌾</span> CropSignal</div>
+  <div class="header-meta">AI-powered • 7-day predictions • <span id="updated">Loading…</span></div>
+</header>
+
+<!-- Stats Bar -->
+<div class="stats-bar">
+  <div class="stat-pill all-pill active" onclick="filterSignal('')">
+    <div><div class="num" id="s-all">–</div><div class="lbl">Total Crops</div></div>
+  </div>
+  <div class="stat-pill buy-pill" onclick="filterSignal('BUY')">
+    <div><div class="num" id="s-buy">–</div><div class="lbl">🟢 Buy Signals</div></div>
+  </div>
+  <div class="stat-pill sell-pill" onclick="filterSignal('SELL')">
+    <div><div class="num" id="s-sell">–</div><div class="lbl">🔴 Sell Signals</div></div>
+  </div>
+  <div class="stat-pill hold-pill" onclick="filterSignal('HOLD')">
+    <div><div class="num" id="s-hold">–</div><div class="lbl">🟡 Hold Signals</div></div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="search-box">
+      <input type="text" id="search" placeholder="🔍  Search crop…" oninput="onSearch()">
+    </div>
+    <div class="crop-list" id="crop-list">
+      <div class="loading"><div class="spinner"></div> Loading predictions…</div>
+    </div>
+  </div>
+
+  <!-- Detail -->
+  <div class="detail" id="detail">
+    <div class="empty-state">
+      <div class="icon">🌱</div>
+      <div>Select a crop from the list to see price analysis</div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+let allPredictions = [];
+let currentFilter  = '';
+let chart = null;
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+async function boot() {
+  try {
+    const res  = await fetch('/api/signals');
+    if (!res.ok) { showError(await res.json()); return; }
+    const data = await res.json();
+    allPredictions = data.predictions;
+
+    document.getElementById('updated').textContent =
+      'Updated ' + data.generated_at.slice(0,10);
+
+    const buy  = allPredictions.filter(p=>p.signal==='BUY').length;
+    const sell = allPredictions.filter(p=>p.signal==='SELL').length;
+    const hold = allPredictions.filter(p=>p.signal==='HOLD').length;
+    document.getElementById('s-all').textContent  = allPredictions.length;
+    document.getElementById('s-buy').textContent  = buy;
+    document.getElementById('s-sell').textContent = sell;
+    document.getElementById('s-hold').textContent = hold;
+
+    renderList(allPredictions);
+    if (allPredictions.length) selectCrop(allPredictions[0]);
+  } catch(e) {
+    showError({error:'Could not connect. Is app.py running?'});
+  }
+}
+
+function showError(data) {
+  document.getElementById('crop-list').innerHTML =
+    `<div style="padding:1.5rem;color:#f87171;font-size:.85rem;">⚠ ${data.error}</div>`;
+}
+
+// ── List ──────────────────────────────────────────────────────────────────
+function renderList(items) {
+  const el = document.getElementById('crop-list');
+  if (!items.length) {
+    el.innerHTML = '<div style="padding:1.5rem;color:#475569;font-size:.85rem;">No crops found</div>';
+    return;
+  }
+  el.innerHTML = items.map(p => `
+    <div class="crop-item" id="item-${p.commodity}" onclick='selectCrop(${JSON.stringify(p)})'>
+      <div>
+        <div class="crop-name">${p.commodity}</div>
+        <div class="crop-price">₹${p.current_price.toLocaleString()}/qtl</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.3rem">
+        <span class="badge ${p.signal}">${p.signal}</span>
+        <span style="font-size:.7rem;color:${p.pct_change>=0?'#4ade80':'#f87171'}">
+          ${p.pct_change>=0?'▲':'▼'}${Math.abs(p.pct_change).toFixed(1)}%
+        </span>
+      </div>
+    </div>`).join('');
+}
+
+// ── Filter ────────────────────────────────────────────────────────────────
+function filterSignal(sig) {
+  currentFilter = sig;
+  document.querySelectorAll('.stat-pill').forEach(el=>el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  onSearch();
+}
+
+function onSearch() {
+  const q = document.getElementById('search').value.toLowerCase();
+  let items = allPredictions;
+  if (currentFilter) items = items.filter(p=>p.signal===currentFilter);
+  if (q) items = items.filter(p=>p.commodity.toLowerCase().includes(q));
+  renderList(items);
+}
+
+// ── Detail ────────────────────────────────────────────────────────────────
+function selectCrop(p) {
+  // Highlight sidebar item
+  document.querySelectorAll('.crop-item').forEach(el=>el.classList.remove('active'));
+  const el = document.getElementById('item-'+p.commodity);
+  if (el) { el.classList.add('active'); el.scrollIntoView({block:'nearest'}); }
+
+  const pct   = p.pct_change;
+  const arrow = pct>=0 ? '▲' : '▼';
+  const pClass= pct>=0 ? 'up' : 'down';
+
+  const signalEmoji = {BUY:'🟢',SELL:'🔴',HOLD:'🟡'}[p.signal]||'⚪';
+
+  document.getElementById('detail').innerHTML = `
+    <div class="detail-header">
+      <div>
+        <div class="detail-title">${p.commodity}</div>
+        <div class="detail-type">Price Unit: ₹/Quintal</div>
+      </div>
+      <div class="signal-card ${p.signal}">
+        <div class="signal-emoji">${signalEmoji}</div>
+        <div>
+          <div class="signal-text ${p.signal}">${p.signal}</div>
+          <div class="signal-sub">${p.current_date} → ${p.predicted_date}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric">
+        <div class="m-label">Current Price</div>
+        <div class="m-value">₹${p.current_price.toLocaleString('en-IN',{maximumFractionDigits:0})}</div>
+        <div class="m-sub">As of ${p.current_date}</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">7-Day Forecast</div>
+        <div class="m-value">₹${p.predicted_price.toLocaleString('en-IN',{maximumFractionDigits:0})}</div>
+        <div class="m-sub">By ${p.predicted_date}</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Expected Change</div>
+        <div class="m-value ${pClass}">${arrow} ${Math.abs(pct).toFixed(2)}%</div>
+        <div class="m-sub">${pct>=0?'Price rising':'Price falling'}</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Model Accuracy</div>
+        <div class="m-value">${(Math.max(0,p.r2)*100).toFixed(1)}%</div>
+        <div class="m-sub">R² score</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Avg Error (MAE)</div>
+        <div class="m-value">₹${p.mae.toLocaleString('en-IN',{maximumFractionDigits:0})}</div>
+        <div class="m-sub">Mean absolute error</div>
+      </div>
+      <div class="metric">
+        <div class="m-label">Data Points</div>
+        <div class="m-value">${p.data_points.toLocaleString()}</div>
+        <div class="m-sub">Training records</div>
+      </div>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="chart-title">📈 Price History (last 180 days) + 7-day forecast</div>
+      <canvas id="price-chart"></canvas>
+    </div>
+
+    <div style="font-size:.72rem;color:#334155;text-align:center;padding-bottom:1rem">
+      ⚠ Predictions are based on historical patterns. Not financial advice.
+    </div>
+  `;
+
+  renderChart(p);
+}
+
+function renderChart(p) {
+  if (chart) chart.destroy();
+  const hist   = p.history || [];
+  const labels = hist.map(h=>h.report_date);
+  const prices = hist.map(h=>+h.modal_price.toFixed(2));
+
+  // Add forecast point
+  labels.push(p.predicted_date);
+  prices.push(null); // gap
+
+  const ctx = document.getElementById('price-chart').getContext('2d');
+
+  const gradUp = ctx.createLinearGradient(0,0,0,300);
+  gradUp.addColorStop(0,'rgba(34,211,238,.25)');
+  gradUp.addColorStop(1,'rgba(34,211,238,0)');
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Modal Price (₹/qtl)',
+          data: prices,
+          borderColor: '#22d3ee',
+          backgroundColor: gradUp,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          fill: true,
+          tension: 0.35,
+          spanGaps: false,
+        },
+        {
+          label: 'Forecast',
+          data: [...Array(prices.length-1).fill(null), prices[prices.length-2], p.predicted_price],
+          borderColor: p.signal==='BUY'?'#4ade80':p.signal==='SELL'?'#f87171':'#fbbf24',
+          borderWidth: 2,
+          borderDash: [6,4],
+          pointRadius: [0,6],
+          pointBackgroundColor: p.signal==='BUY'?'#4ade80':p.signal==='SELL'?'#f87171':'#fbbf24',
+          fill: false,
+          tension: 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: {mode:'index',intersect:false},
+      plugins: {
+        legend: {
+          labels:{color:'#94a3b8',font:{size:11}}
+        },
+        tooltip: {
+          backgroundColor:'rgba(6,11,20,.9)',
+          borderColor:'rgba(255,255,255,.1)',
+          borderWidth:1,
+          callbacks: {
+            label: ctx => ` ₹${ctx.parsed.y?.toLocaleString('en-IN',{maximumFractionDigits:0})}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid:{color:'rgba(255,255,255,.04)'},
+          ticks:{color:'#475569',maxTicksLimit:8,font:{size:10}},
+        },
+        y: {
+          grid:{color:'rgba(255,255,255,.06)'},
+          ticks:{color:'#475569',font:{size:10},
+            callback: v=>'₹'+v.toLocaleString('en-IN',{maximumFractionDigits:0})},
+        }
+      }
+    }
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
